@@ -1,0 +1,12 @@
+# Edit this file with your deployment details before pushing.
+# The autograder reads this to know where to send graded requests.
+#
+# studentId:   your GitHub Classroom handle (e.g. "alice-2026").
+#              Used to identify your submission in grader logs.
+# deployedUrl: the HTTPS URL of your live service. No trailing slash, no path.
+#              Example: https://todo-api-alice.onrender.com
+#
+# Both fields must be non-empty for the autograder to run.
+
+studentId: REPLACE_ME
+deployedUrl: REPLACE_ME

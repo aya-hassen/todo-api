@@ -1,0 +1,156 @@
+name: Autograding
+
+# DO NOT MODIFY this workflow. Changes will be reverted before grading and may be
+# treated as an academic-integrity violation. The autograder reads grading.yml,
+# calls the private teacher grading service, then awards points per category.
+
+on:
+    push:
+        branches: [ main, master ]
+    pull_request:
+        branches: [ main, master ]
+    workflow_dispatch:
+
+permissions:
+    checks: write
+    actions: read
+    contents: read
+    id-token: write
+
+jobs:
+    autograde:
+        name: Autograding
+        runs-on: ubuntu-latest
+        if: github.actor != 'github-classroom[bot]'
+        steps:
+            - uses: actions/checkout@v4
+
+            # 1) Parse grading.yml and surface the URL/studentId for later steps.
+            - name: Read grading.yml
+              id: cfg
+              run: |
+                  set -e
+                  STUDENT_ID=$(yq '.studentId' grading.yml)
+                  DEPLOYED_URL=$(yq '.deployedUrl' grading.yml)
+                  echo "studentId=$STUDENT_ID"
+                  echo "deployedUrl=$DEPLOYED_URL"
+                  if [ -z "$STUDENT_ID" ] || [ "$STUDENT_ID" = "REPLACE_ME" ] || [ "$STUDENT_ID" = "null" ]; then
+                      echo "::error::studentId is missing or unfilled in grading.yml"
+                      exit 1
+                  fi
+                  if [ -z "$DEPLOYED_URL" ] || [ "$DEPLOYED_URL" = "REPLACE_ME" ] || [ "$DEPLOYED_URL" = "null" ]; then
+                      echo "::error::deployedUrl is missing or unfilled in grading.yml"
+                      exit 1
+                  fi
+                  if [[ "$DEPLOYED_URL" != https://* ]]; then
+                      echo "::error::deployedUrl must start with https://"
+                      exit 1
+                  fi
+                  echo "studentId=$STUDENT_ID" >> "$GITHUB_OUTPUT"
+                  echo "deployedUrl=$DEPLOYED_URL" >> "$GITHUB_OUTPUT"
+
+            # 2) Call the private teacher grading service.
+            - name: Run remote grader
+              id: grade
+              env:
+                  TEACHER_GRADER_URL: https://grader.itsforest.space
+                  STUDENT_ID: ${{ steps.cfg.outputs.studentId }}
+                  DEPLOYED_URL: ${{ steps.cfg.outputs.deployedUrl }}
+              run: |
+                  set -e
+                  OIDC_TOKEN=$(curl -sS \
+                      -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+                      "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=jvm-2026-grader" \
+                      | jq -r .value)
+                  if [ -z "$OIDC_TOKEN" ] || [ "$OIDC_TOKEN" = "null" ]; then
+                      echo "::error::Failed to obtain GitHub OIDC token. Did you grant id-token: write?"
+                      exit 1
+                  fi
+                  echo "::add-mask::$OIDC_TOKEN"
+
+                  PAYLOAD=$(jq -cn \
+                      --arg sid "$STUDENT_ID" \
+                      --arg url "$DEPLOYED_URL" \
+                      '{studentId:$sid, deployedUrl:$url}')
+                  echo "Calling grader at $TEACHER_GRADER_URL/grade"
+                  HTTP_CODE=$(curl -sS -o report.json -w '%{http_code}' \
+                      --max-time 180 \
+                      -X POST "$TEACHER_GRADER_URL/grade" \
+                      -H 'Content-Type: application/json' \
+                      -H "Authorization: Bearer $OIDC_TOKEN" \
+                      -d "$PAYLOAD")
+                  echo "Grader HTTP status: $HTTP_CODE"
+                  cat report.json
+                  if [ "$HTTP_CODE" != "200" ]; then
+                      echo "::error::Grader returned HTTP $HTTP_CODE"
+                      exit 1
+                  fi
+
+            # 3) Surface each category result. The autograding-command-grader
+            #    awards full points iff the inline `jq` test exits 0.
+
+            - name: Health (2 pts)
+              id: cat_health
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Health (2 pts)
+                  command: jq -e '.categories[] | select(.name=="health") | .awarded == .max' report.json
+                  max-score: 2
+                  timeout: 1
+
+            - name: Auth (6 pts)
+              id: cat_auth
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Auth (6 pts)
+                  command: jq -e '.categories[] | select(.name=="auth") | .awarded == .max' report.json
+                  max-score: 6
+                  timeout: 1
+
+            - name: Todo CRUD (10 pts)
+              id: cat_crud
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Todo CRUD (10 pts)
+                  command: jq -e '.categories[] | select(.name=="crud") | .awarded == .max' report.json
+                  max-score: 10
+                  timeout: 1
+
+            - name: Filtering (8 pts)
+              id: cat_filtering
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Filtering (8 pts)
+                  command: jq -e '.categories[] | select(.name=="filtering") | .awarded == .max' report.json
+                  max-score: 8
+                  timeout: 1
+
+            - name: Isolation (5 pts)
+              id: cat_isolation
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Isolation (5 pts)
+                  command: jq -e '.categories[] | select(.name=="isolation") | .awarded == .max' report.json
+                  max-score: 5
+                  timeout: 1
+
+            - name: Edge cases (6 pts)
+              id: cat_edge
+              uses: classroom-resources/autograding-command-grader@v1
+              with:
+                  test-name: Edge cases (6 pts)
+                  command: jq -e '.categories[] | select(.name=="edge") | .awarded == .max' report.json
+                  max-score: 6
+                  timeout: 1
+
+            - name: Autograding Reporter
+              uses: classroom-resources/autograding-grading-reporter@v1
+              env:
+                  CAT_HEALTH_RESULTS: "${{ steps.cat_health.outputs.result }}"
+                  CAT_AUTH_RESULTS: "${{ steps.cat_auth.outputs.result }}"
+                  CAT_CRUD_RESULTS: "${{ steps.cat_crud.outputs.result }}"
+                  CAT_FILTERING_RESULTS: "${{ steps.cat_filtering.outputs.result }}"
+                  CAT_ISOLATION_RESULTS: "${{ steps.cat_isolation.outputs.result }}"
+                  CAT_EDGE_RESULTS: "${{ steps.cat_edge.outputs.result }}"
+              with:
+                  runners: cat_health,cat_auth,cat_crud,cat_filtering,cat_isolation,cat_edge

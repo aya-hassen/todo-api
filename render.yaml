@@ -1,0 +1,17 @@
+# Render Blueprint — see https://render.com/docs/blueprint-spec
+#
+# Students should not need to edit this. It tells Render to build the
+# Dockerfile in this repo, run it on the free plan, and expose the port
+# that the app reads from $PORT.
+services:
+  - type: web
+    name: todo-api
+    runtime: docker
+    plan: free
+    region: frankfurt          # any region works; pick one close to you
+    branch: main
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: 8080

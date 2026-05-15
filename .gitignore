@@ -1,0 +1,21 @@
+# JetBrains IDE
+/.idea
+!/.idea/runConfigurations/
+
+# Kotlin
+/.kotlin
+
+# Build files
+/build
+/teacher-client/build
+
+# Gradle
+/.gradle
+
+# OS
+.DS_Store
+
+# Local env / secrets
+.env
+.env.*
+!.env.example
