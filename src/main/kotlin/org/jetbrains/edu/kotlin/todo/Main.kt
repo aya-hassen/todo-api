@@ -13,7 +13,7 @@ import org.jetbrains.edu.kotlin.todo.auth.TokenAuthService
 import org.jetbrains.edu.kotlin.todo.storage.InMemoryStore
 
 fun main() {
-    val port = (System.getenv("PORT") ?: "8080").toInt()
+    val port = (System.getenv("PORT") ?: System.getProperty("PORT") ?: "8080").toInt()
     val store = InMemoryStore()
     val auth = TokenAuthService(store)
 
