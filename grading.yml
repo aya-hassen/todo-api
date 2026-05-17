@@ -8,5 +8,5 @@
 #
 # Both fields must be non-empty for the autograder to run.
 
-studentId: aya-hassen
-deployedUrl: https://todo-api-aya.onrender.com
+studentId: REPLACE_ME
+deployedUrl: REPLACE_ME
